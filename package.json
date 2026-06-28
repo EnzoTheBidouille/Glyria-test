@@ -1,0 +1,27 @@
+{
+  "name": "caillou-magique",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Le Caillou Magique — a sarcastic cosmic rock running the Caillou Cosmique stardust economy.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "glyria dev",
+    "build": "glyria build",
+    "start": "glyria start",
+    "generate": "glyria generate",
+    "migrate": "tsx src/db/migrate-cli.ts"
+  },
+  "dependencies": {
+    "@glyria/bot": "^1.4.1",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@types/pg": "^8.20.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}

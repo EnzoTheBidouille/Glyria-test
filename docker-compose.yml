@@ -1,0 +1,34 @@
+# Postgres local (et, en option, le bot). Pour le dev local de Postgres seul :
+#   docker compose up -d db
+# Pour tout lancer (bot + db) :
+#   docker compose up --build
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: caillou
+      POSTGRES_PASSWORD: caillou
+      POSTGRES_DB: caillou
+    ports:
+      - "5432:5432"
+    volumes:
+      - caillou_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U caillou -d caillou"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  bot:
+    build: .
+    env_file: .env
+    # En conteneur, on pointe vers le service `db` (override de DATABASE_URL du .env).
+    environment:
+      DATABASE_URL: postgres://caillou:caillou@db:5432/caillou
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  caillou_db:

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.glyria/
+.env
+.git/
+*.log
+README.md
