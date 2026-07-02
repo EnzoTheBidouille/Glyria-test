@@ -89,6 +89,17 @@ export const PHRASES = {
     { text: "Personne n'a la moindre poussière. Un désert. J'adore.", weight: 1 },
   ],
 
+  // ── /roast ────────────────────────────────────────────────────────────────
+  roast_caillou: [
+    { text: "Me roast, MOI ? J'ai survécu à 4,5 milliards d'années de météorites, {name}. Toi, tu survis à peine au lundi.", weight: 3 },
+    { text: "Audacieux. On ne roast pas un caillou : le feu, c'est mon élément d'origine, {name}.", weight: 2 },
+    { text: "Non. Par contre, toi, reste dans le coin — j'allais justement chercher un exemple de médiocrité.", weight: 2 },
+  ],
+  roast_bot: [
+    { text: "Je ne roast pas les bots. Entre machines, on garde une dignité que vous, les organiques, n'aurez jamais.", weight: 3 },
+    { text: "Roast un bot ? Il exécute son code sans se plaindre, lui. C'est déjà mieux que toi, {name}.", weight: 2 },
+  ],
+
   // ── Divers ────────────────────────────────────────────────────────────────
   error_generic: [
     { text: "Quelque chose a explosé dans le vide. Ce n'est pas ma faute. Réessaie.", weight: 3 },

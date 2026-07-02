@@ -15,8 +15,8 @@ file-based au-dessus de discord.js v14.
 
 - **Gain passif** : 1–3 poussières par message, avec un cooldown par membre
   (60 s par défaut, configurable) pour empêcher le spam de minter de la monnaie.
-- **Commandes** : `/wallet`, `/give`, `/classement`, `/boutique`, `/acheter`,
-  `/caillou-admin`.
+- **Commandes** : `/wallet`, `/give`, `/classement`, `/roast`, `/boutique`,
+  `/acheter`, `/caillou-admin`.
 - **Boutique** : rôle de couleur (7 j), L'Élu du Caillou (rôle prestige à
   détenteur unique), renommage d'un salon autorisé (1 h), statut custom du bot (1 h).
   **Tous les perks expirent automatiquement et sont révocables par un admin.**
@@ -106,6 +106,7 @@ pas au scoping de l'enregistrement (non exposé par glyria à ce jour).
 | `/wallet`                         | Affiche ton solde (éphémère) avec un commentaire acide.  |
 | `/give <destinataire> <montant>`  | Transfère de la poussière (refuse auto-don, négatif, découvert). |
 | `/classement`                     | Top 10 des soldes.                                       |
+| `/roast [cible]`                  | Roast public généré (sans cible : toi-même). Gratuit.    |
 | `/boutique`                       | Liste les perks et leur coût.                            |
 | `/acheter couleur`                | Rôle de couleur, 7 jours.                                |
 | `/acheter elu`                    | Devenir L'Élu du Caillou (détrône l'actuel).             |
@@ -151,7 +152,7 @@ docker compose up --build
 
 ```
 src/
-  commands/   wallet, give, classement, boutique, acheter, admin
+  commands/   wallet, give, classement, roast, boutique, acheter, admin
   events/     ready (statut + sweep), messageCreate (gain)
   composables/ useConfig, useDb, useEconomy, useShop, usePerks, useSweep, useClient, useRoast
   utils/      personality, format, respond, errors
