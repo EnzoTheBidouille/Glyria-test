@@ -5,6 +5,7 @@
 services:
   db:
     image: postgres:16-alpine
+    name: db
     environment:
       POSTGRES_USER: caillou
       POSTGRES_PASSWORD: caillou
@@ -22,6 +23,7 @@ services:
   bot:
     build: .
     env_file: .env
+    name: bot
     # En conteneur, on pointe vers le service `db` (override de DATABASE_URL du .env).
     environment:
       DATABASE_URL: postgres://caillou:caillou@db:5432/caillou
