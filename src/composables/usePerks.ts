@@ -12,8 +12,36 @@ async function getMember(userId: string): Promise<GuildMember> {
 async function renameChannel(channelId: string, name: string): Promise<void> {
   const channel = await useClient().channels.fetch(channelId);
   if (channel && "setName" in channel && typeof channel.setName === "function") {
+    // Pas d'appel API si le nom est déjà le bon : Discord limite les renommages
+    // de salon à 2 par 10 minutes, chaque appel économisé compte.
+    if ("name" in channel && channel.name === name) return;
     await channel.setName(name, "Perk du Caillou Magique");
   }
+}
+
+/**
+ * Le perk encore actif le plus récent d'un type donné, hors `excludeId`.
+ * Sert à réappliquer le "suivant" quand un perk qui se superpose expire
+ * (deux statuts achetés à la suite, deux renommages du même salon…).
+ */
+async function latestActivePerk(
+  type: ActivePerk["type"],
+  excludeId: number | null,
+  channelId?: string,
+): Promise<PerkRevert | null> {
+  const { rows } = await useDb().query<{ revert: PerkRevert }>(
+    `SELECT ap.revert
+       FROM active_perks ap
+       JOIN shop_items si ON si.id = ap.item_id
+      WHERE si.type = $1
+        AND ($2::bigint IS NULL OR ap.id <> $2)
+        AND ($3::text IS NULL OR ap.revert->>'channelId' = $3)
+        AND (ap.expires_at IS NULL OR ap.expires_at > now())
+      ORDER BY ap.granted_at DESC
+      LIMIT 1`,
+    [type, excludeId, channelId ?? null],
+  );
+  return rows[0]?.revert ?? null;
 }
 
 function applyStatus(text: string): void {
@@ -35,14 +63,18 @@ export interface Perks {
   grant(item: ShopItem, userId: string, opts: GrantOptions): Promise<void>;
   /** Défait un perk (expiration ou révocation admin). Best-effort, ne jette pas. */
   revert(perk: ActivePerk): Promise<void>;
-  /** Restaure le statut par défaut du bot. */
-  resetStatus(): void;
+  /**
+   * Applique le statut payé encore actif le plus récent, sinon le statut par
+   * défaut. Appelé au ClientReady pour qu'un statut acheté survive au restart.
+   */
+  restoreStatus(): Promise<void>;
 }
 
 export const usePerks = (): Perks => {
   return {
-    resetStatus() {
-      applyStatus(useConfig().defaultStatus);
+    async restoreStatus() {
+      const active = await latestActivePerk("bot_status", null);
+      applyStatus(active?.appliedValue ?? useConfig().defaultStatus);
     },
 
     async grant(item, userId, opts) {
@@ -109,13 +141,23 @@ export const usePerks = (): Perks => {
             break;
           }
           case "channel_rename": {
-            if (perk.revert.channelId && perk.revert.originalName) {
-              await renameChannel(perk.revert.channelId, perk.revert.originalName);
+            if (perk.revert.channelId) {
+              // Si un autre renommage payé est encore actif sur ce salon, c'est
+              // son nom qui doit rester, pas le nom d'origine.
+              const next = await latestActivePerk(
+                "channel_rename",
+                perk.id,
+                perk.revert.channelId,
+              );
+              const name = next?.appliedValue ?? perk.revert.originalName;
+              if (name) await renameChannel(perk.revert.channelId, name);
             }
             break;
           }
           case "bot_status": {
-            applyStatus(useConfig().defaultStatus);
+            // Même logique : ne pas écraser un statut payé plus récent.
+            const next = await latestActivePerk("bot_status", perk.id);
+            applyStatus(next?.appliedValue ?? useConfig().defaultStatus);
             break;
           }
         }

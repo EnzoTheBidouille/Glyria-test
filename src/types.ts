@@ -36,6 +36,12 @@ export interface PerkRevert {
   roleId?: string;
   channelId?: string;
   originalName?: string;
+  /**
+   * Valeur appliquée par le perk (nom de salon, texte de statut). Permet de
+   * réappliquer le perk encore actif le plus récent quand un autre expire,
+   * et de restaurer le statut payé après un redémarrage du bot.
+   */
+  appliedValue?: string;
 }
 
 export interface ActivePerk {

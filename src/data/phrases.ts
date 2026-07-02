@@ -66,6 +66,10 @@ export const PHRASES = {
   buy_needs_value: [
     { text: "Ce perk exige une valeur (option `valeur`). Réfléchis avant de cliquer, {name}.", weight: 2 },
   ],
+  buy_too_long: [
+    { text: "Trop long. {max} caractères maximum. Le cosmos est infini, ce champ non.", weight: 3 },
+    { text: "Raccourcis-moi ça : {max} caractères, pas un de plus. Discord a des limites. Toi aussi, visiblement.", weight: 2 },
+  ],
   buy_needs_channel: [
     { text: "Choisis un salon (option `salon`) dans la liste autorisée. Je ne lis pas dans tes pensées vides.", weight: 2 },
   ],

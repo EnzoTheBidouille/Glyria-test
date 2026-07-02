@@ -5,10 +5,14 @@ export default new GlyriaCommand()
   .execute(async (ctx) => {
     try {
       const balance = await useEconomy().balanceOf(ctx.user.id);
-      const comment = pickPhrase(walletTier(balance), {
-        name: ctx.user.username,
-        balance,
-      });
+      const tier = walletTier(balance);
+      const vars = { name: ctx.user.username, balance };
+      // Une fois sur deux : roast généré (Tier 2), sinon phrase curatée (Tier 1).
+      const roast = useRoast();
+      const comment =
+        roast && Math.random() < 0.5
+          ? await roast.generate({ context: tier, userId: ctx.user.id, vars })
+          : pickPhrase(tier, vars);
 
       const embed = new EmbedV2Builder()
         .container({ accentColor: 0x8b5cf6 })

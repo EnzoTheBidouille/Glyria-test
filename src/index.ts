@@ -21,3 +21,19 @@ const client = new GlyriaClient({
 });
 
 await client.login();
+
+// Arrêt propre (Ctrl-C, docker stop / redéploiement Dokploy) : stopper le
+// sweep, fermer la gateway Discord puis le pool Postgres. Sans ça, SIGTERM
+// tue le process au milieu d'éventuelles requêtes en vol.
+let shuttingDown = false;
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info("Caillou", `${signal} reçu, le Caillou retourne au vide cosmique.`);
+  useSweep().stop();
+  await client.destroy().catch(() => {});
+  await useDb().close().catch(() => {});
+  process.exit(0);
+}
+process.once("SIGINT", () => void shutdown("SIGINT"));
+process.once("SIGTERM", () => void shutdown("SIGTERM"));

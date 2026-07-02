@@ -6,9 +6,10 @@ import type { PhraseKey } from "../data/phrases.js";
 
 export type { PhraseKey };
 
-type Vars = Record<string, string | number>;
+export type PhraseVars = Record<string, string | number>;
 
-function interpolate(text: string, vars?: Vars): string {
+/** Remplace les {variables} d'un gabarit. Partagé avec le générateur de roasts. */
+export function interpolate(text: string, vars?: PhraseVars): string {
   if (!vars) return text;
   return text.replace(/\{(\w+)\}/g, (_match, key: string) => {
     const value = vars[key];
@@ -17,7 +18,7 @@ function interpolate(text: string, vars?: Vars): string {
 }
 
 /** Tire une phrase pondérée pour un contexte donné et interpole les variables. */
-export const pickPhrase = (context: PhraseKey, vars?: Vars): string => {
+export const pickPhrase = (context: PhraseKey, vars?: PhraseVars): string => {
   const pool: readonly Phrase[] = PHRASES[context];
   const total = pool.reduce((sum, p) => sum + p.weight, 0);
 

@@ -8,8 +8,8 @@ Construit avec **[glyria.js](https://js.glyria.app)** (`@glyria/bot`), un framew
 file-based au-dessus de discord.js v14.
 
 > **Périmètre v1** : uniquement l'économie poussière d'étoile + la boutique de perks.
-> Pas de TFT, pas de jeux de stream, pas d'appel LLM. (Le « roast » via API est
-> seulement esquissé — voir `src/composables/useRoast.ts`.)
+> Pas de TFT, pas de jeux de stream, pas d'appel LLM. (Le « roast » est généré
+> localement, sans API — voir `src/composables/useRoast.ts`.)
 
 ## Fonctionnalités
 
@@ -20,6 +20,10 @@ file-based au-dessus de discord.js v14.
 - **Boutique** : rôle de couleur (7 j), L'Élu du Caillou (rôle prestige à
   détenteur unique), renommage d'un salon autorisé (1 h), statut custom du bot (1 h).
   **Tous les perks expirent automatiquement et sont révocables par un admin.**
+  Racheter un rôle de couleur déjà actif **prolonge** sa durée. Les perks qui se
+  superposent (deux statuts, deux renommages du même salon) se défont proprement :
+  l'expiration de l'un réapplique le plus récent encore payé, et le statut acheté
+  survit à un redémarrage du bot.
 - **Audit** : chaque variation de solde écrit une ligne dans `transactions`.
   Les modifications passent par des transactions SQL avec `SELECT … FOR UPDATE`.
 
@@ -105,7 +109,7 @@ pas au scoping de l'enregistrement (non exposé par glyria à ce jour).
 | `/boutique`                       | Liste les perks et leur coût.                            |
 | `/acheter couleur`                | Rôle de couleur, 7 jours.                                |
 | `/acheter elu`                    | Devenir L'Élu du Caillou (détrône l'actuel).             |
-| `/acheter renommer <nom> [salon]` | Renomme un salon autorisé, 1 h. `salon` = ID (sinon le 1er autorisé). |
+| `/acheter renommer <nom> [salon]` | Renomme un salon autorisé, 1 h. `salon` = #mention, nom ou ID (sinon le 1er autorisé). |
 | `/acheter statut <texte>`         | Impose un statut au bot, 1 h.                            |
 | `/caillou-admin ajuster`          | (ManageGuild) Corrige un solde, audité.                  |
 | `/caillou-admin revoquer <id>`    | (ManageGuild) Révoque un perk actif et annule son effet. |
@@ -137,9 +141,11 @@ docker compose up --build
 
 - **Tier 1 (actif)** : pool de phrases pondérées en français dans
   `src/data/phrases.ts`, tirées par `pickPhrase()` — zéro coût API.
-- **Tier 2 (esquisse seulement)** : `src/composables/useRoast.ts` expose une
-  interface `RoastGenerator` renvoyant `null` en v1. Brancher l'API Anthropic ici
-  plus tard sans toucher au reste.
+- **Tier 2 (actif, local)** : `src/composables/useRoast.ts` assemble des roasts
+  aléatoires (ouverture + corps contextuel + chute) à partir des ingrédients de
+  `src/data/roasts.ts` — toujours zéro coût API. `/wallet` alterne 50/50 entre
+  les deux tiers. Brancher l'API Anthropic plus tard = remplacer `generate()`
+  en gardant le contrat `RoastGenerator`.
 
 ## Structure
 

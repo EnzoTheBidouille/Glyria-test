@@ -5,9 +5,13 @@ import type { Client } from "discord.js";
 export default new GlyriaEvent()
   .setEvent(djs.Events.ClientReady)
   .once()
-  .setHandler((client: Client<true>) => {
+  .setHandler(async (client: Client<true>) => {
     setClient(client);
-    usePerks().resetStatus();
+    // Restaure un éventuel statut acheté encore actif (sinon le défaut) : un
+    // perk payé ne doit pas disparaître parce que le bot a redémarré.
+    await usePerks().restoreStatus().catch((err: Error) => {
+      logger.warn("Caillou", `Restauration du statut échouée : ${err.message}`);
+    });
     useSweep().start();
     logger.success("Caillou", `En ligne : ${client.user.tag} rumine désormais dans le vide.`);
   });

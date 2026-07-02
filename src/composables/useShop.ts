@@ -136,8 +136,17 @@ export const useShop = (): Shop => {
       const cfg = item.config;
 
       // ── Validation des prérequis (avant tout débit) ──────────────────────
-      if (cfg.needsValue && (!value || value.trim() === "")) {
+      const cleanValue = value?.trim() || undefined;
+      if (cfg.needsValue && !cleanValue) {
         throw new CaillouError(pickPhrase("buy_needs_value", { name: "toi" }));
+      }
+      if (cleanValue) {
+        // Limites Discord : nom de salon 100, statut custom 128. Vérifié avant
+        // le débit pour éviter un aller-retour débit → échec API → remboursement.
+        const maxLen = item.type === "channel_rename" ? 100 : 128;
+        if (cleanValue.length > maxLen) {
+          throw new CaillouError(pickPhrase("buy_too_long", { max: maxLen }));
+        }
       }
       if (cfg.needsChannel) {
         if (!channelId) {
@@ -145,6 +154,34 @@ export const useShop = (): Shop => {
         }
         if (!useConfig().renameWhitelist.includes(channelId)) {
           throw new CaillouError(pickPhrase("buy_bad_channel"));
+        }
+      }
+
+      // ── Rôle déjà détenu : on prolonge le perk existant au lieu d'en
+      //    empiler un second (sinon l'expiration du premier retirerait le rôle
+      //    encore payé par le second). Ne concerne pas les rôles singleHolder,
+      //    dont le rachat passe par la logique de détrônage.
+      if (cfg.roleEnvKey && !cfg.singleHolder && cfg.durationMs) {
+        const { rows } = await db.query<{ id: number; expires_at: Date | null }>(
+          `SELECT id, expires_at FROM active_perks
+            WHERE user_id = $1 AND item_id = $2
+              AND (expires_at IS NULL OR expires_at > now())
+            ORDER BY expires_at DESC NULLS FIRST
+            LIMIT 1`,
+          [userId, item.id],
+        );
+        const existing = rows[0];
+        if (existing) {
+          const base = Math.max(existing.expires_at?.getTime() ?? 0, Date.now());
+          const newExpiry = new Date(base + cfg.durationMs);
+          await db.withTransaction(async (client) => {
+            await useEconomy().debit(client, userId, item.cost, `buy:${item.id}:extend`);
+            await client.query(
+              "UPDATE active_perks SET expires_at = $2 WHERE id = $1",
+              [existing.id, newExpiry],
+            );
+          });
+          return { item, cost: item.cost, expiresAt: newExpiry };
         }
       }
 
@@ -157,7 +194,26 @@ export const useShop = (): Shop => {
       }
       if (item.type === "channel_rename" && channelId) {
         revert.channelId = channelId;
-        revert.originalName = await readChannelName(channelId);
+        revert.appliedValue = cleanValue;
+        // Si un renommage est déjà actif sur ce salon, le nom courant est déjà
+        // un nom de perk : on hérite du VRAI nom d'origine pour que la dernière
+        // expiration restaure le nom initial, pas un nom acheté intermédiaire.
+        const { rows } = await db.query<{ revert: PerkRevert }>(
+          `SELECT ap.revert
+             FROM active_perks ap
+             JOIN shop_items si ON si.id = ap.item_id
+            WHERE si.type = 'channel_rename'
+              AND ap.revert->>'channelId' = $1
+              AND (ap.expires_at IS NULL OR ap.expires_at > now())
+            ORDER BY ap.granted_at DESC
+            LIMIT 1`,
+          [channelId],
+        );
+        revert.originalName =
+          rows[0]?.revert.originalName ?? (await readChannelName(channelId));
+      }
+      if (item.type === "bot_status") {
+        revert.appliedValue = cleanValue;
       }
 
       const expiresAt = cfg.durationMs ? new Date(Date.now() + cfg.durationMs) : null;
@@ -179,7 +235,7 @@ export const useShop = (): Shop => {
 
       // ── Effet Discord ; compensation (remboursement) si échec ────────────
       try {
-        await usePerks().grant(item, userId, { value, revert, perkId });
+        await usePerks().grant(item, userId, { value: cleanValue, revert, perkId });
       } catch (err) {
         logger.error(
           "Shop",

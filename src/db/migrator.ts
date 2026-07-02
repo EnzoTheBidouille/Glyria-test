@@ -34,6 +34,11 @@ export async function runMigrations(
 
   const applied: string[] = [];
   try {
+    // Verrou consultatif : si deux instances démarrent en même temps (rolling
+    // deploy), une seule joue les migrations, l'autre attend puis ne voit plus
+    // rien à faire. Libéré automatiquement à la fermeture de la connexion.
+    await client.query("SELECT pg_advisory_lock(hashtext('caillou_migrations'))");
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS _migrations (
         name       TEXT PRIMARY KEY,
