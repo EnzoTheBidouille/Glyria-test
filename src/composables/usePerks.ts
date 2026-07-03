@@ -28,6 +28,7 @@ async function latestActivePerk(
   type: ActivePerk["type"],
   excludeId: number | null,
   channelId?: string,
+  targetId?: string,
 ): Promise<PerkRevert | null> {
   const { rows } = await useDb().query<{ revert: PerkRevert }>(
     `SELECT ap.revert
@@ -36,10 +37,11 @@ async function latestActivePerk(
       WHERE si.type = $1
         AND ($2::bigint IS NULL OR ap.id <> $2)
         AND ($3::text IS NULL OR ap.revert->>'channelId' = $3)
+        AND ($4::text IS NULL OR ap.revert->>'targetId' = $4)
         AND (ap.expires_at IS NULL OR ap.expires_at > now())
       ORDER BY ap.granted_at DESC
       LIMIT 1`,
-    [type, excludeId, channelId ?? null],
+    [type, excludeId, channelId ?? null, targetId ?? null],
   );
   return rows[0]?.revert ?? null;
 }
@@ -126,6 +128,20 @@ export const usePerks = (): Perks => {
           applyStatus(opts.value);
           break;
         }
+
+        case "nickname_curse": {
+          if (!opts.revert.targetId || !opts.value) {
+            throw new CaillouError(pickPhrase("buy_misconfigured"));
+          }
+          const member = await getMember(opts.revert.targetId);
+          await member.setNickname(opts.value, "Malédiction du pseudo — perk du Caillou");
+          break;
+        }
+
+        case "roast_immunity":
+          // Pur enregistrement en base : l'immunité est consultée par /roast
+          // et par l'achat d'une malédiction. Aucun effet Discord à appliquer.
+          break;
       }
     },
 
@@ -160,6 +176,26 @@ export const usePerks = (): Perks => {
             applyStatus(next?.appliedValue ?? useConfig().defaultStatus);
             break;
           }
+          case "nickname_curse": {
+            if (perk.revert.targetId) {
+              // Une malédiction plus récente sur la même victime garde la main ;
+              // sinon on restaure le pseudo d'origine (null = pas de surnom).
+              const next = await latestActivePerk(
+                "nickname_curse",
+                perk.id,
+                undefined,
+                perk.revert.targetId,
+              );
+              const member = await getMember(perk.revert.targetId);
+              await member.setNickname(
+                next?.appliedValue ?? perk.revert.originalNick ?? null,
+                "Fin de la malédiction du pseudo",
+              );
+            }
+            break;
+          }
+          case "roast_immunity":
+            break; // rien à défaire
         }
       } catch (err) {
         logger.warn("Perks", `Annulation du perk #${perk.id} échouée : ${(err as Error).message}`);

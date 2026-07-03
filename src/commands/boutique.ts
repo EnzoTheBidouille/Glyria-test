@@ -21,7 +21,7 @@ export default new GlyriaCommand()
         }
         container.separator({ spacing: "large" });
         container.textDisplay(
-          "Pour acheter : `/acheter couleur` · `/acheter elu` · `/acheter renommer` · `/acheter statut`",
+          "Pour acheter : `/acheter couleur` · `/acheter elu` · `/acheter renommer` · `/acheter statut` · `/acheter maudire` · `/acheter bouclier`",
         );
       }
 

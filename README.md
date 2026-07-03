@@ -16,7 +16,17 @@ file-based au-dessus de discord.js v14.
 - **Gain passif** : 1–3 poussières par message, avec un cooldown par membre
   (60 s par défaut, configurable) pour empêcher le spam de minter de la monnaie.
 - **Commandes** : `/wallet`, `/give`, `/classement`, `/roast`, `/boutique`,
-  `/acheter`, `/caillou-admin`.
+  `/acheter`, `/offrande`, `/parier`, `/duel`, `/historique`, `/stats`,
+  `/horoscope`, `/humeur`, `/pantheon`, `/caillou-admin`.
+- **Humeur quotidienne** : le Caillou change d'humeur chaque jour (UTC) et
+  module les gains passifs (×0,5 à ×2). Consultable via `/humeur`.
+- **Événements cosmiques** (si `EVENTS_CHANNEL_ID` est configuré) : pluie de
+  météorites (~toutes les 6 h, gains ×2 pendant 10 min) et taxe cosmique
+  (~1/jour, le plus riche perd 5-10 %, poussière détruite).
+- **Saisons** : chaque lundi 00:00 UTC, le plus gros gagnant de la semaine
+  écoulée entre au Panthéon (`/pantheon`) et est couronné publiquement.
+- **Interjections** : rare pique spontanée sur un message (probabilité et
+  cooldown par salon configurables).
 - **Boutique** : rôle de couleur (7 j), L'Élu du Caillou (rôle prestige à
   détenteur unique), renommage d'un salon autorisé (1 h), statut custom du bot (1 h).
   **Tous les perks expirent automatiquement et sont révocables par un admin.**
@@ -64,6 +74,14 @@ Copie `.env.example` en `.env` et remplis :
 | `EARN_MIN`              |        | Gain minimum par message (défaut : 1).                                      |
 | `EARN_MAX`              |        | Gain maximum par message (défaut : 3).                                      |
 | `EARN_COOLDOWN_SECONDS` |        | Cooldown de gain par membre, en secondes (défaut : 60).                     |
+| `EVENTS_CHANNEL_ID`     |   ⚠️   | Salon des annonces (météorites, taxe cosmique, couronnement hebdo). **Sans lui, ces événements sont désactivés.** |
+| `BET_MAX_STAKE`         |        | Mise maximale par pari / duel (défaut : 250).                               |
+| `BET_DAILY_LOSS_CAP`    |        | Pertes nettes maximales par jour UTC, pari + duel (défaut : 500).           |
+| `CLAIM_BASE`            |        | Montant de base de `/offrande` (défaut : 25).                               |
+| `CLAIM_STREAK_BONUS`    |        | Bonus d'offrande par jour de série (défaut : 5).                            |
+| `CLAIM_STREAK_CAP_DAYS` |        | Plafond de la série comptée (défaut : 7).                                   |
+| `INTERJECTION_PERCENT`  |        | % de chance qu'un message déclenche une pique spontanée, 0 = jamais (défaut : 1). |
+| `INTERJECTION_COOLDOWN_SECONDS` | | Silence minimal entre deux piques dans un même salon (défaut : 600).       |
 
 > Les colonnes ⚠️ ne bloquent pas le démarrage du bot, mais le perk correspondant
 > échouera (avec sarcasme) tant qu'elles ne sont pas renseignées.
@@ -112,19 +130,34 @@ pas au scoping de l'enregistrement (non exposé par glyria à ce jour).
 | `/acheter elu`                    | Devenir L'Élu du Caillou (détrône l'actuel).             |
 | `/acheter renommer <nom> [salon]` | Renomme un salon autorisé, 1 h. `salon` = #mention, nom ou ID (sinon le 1er autorisé). |
 | `/acheter statut <texte>`         | Impose un statut au bot, 1 h.                            |
+| `/acheter maudire <cible> <pseudo>` | Rebaptise un membre, 1 h. Bloqué par le Bouclier de basalte. Nécessite la permission « Gérer les pseudos » pour le bot. |
+| `/acheter bouclier`               | 24 h d'immunité contre `/roast` et les malédictions.     |
+| `/offrande`                       | Aumône quotidienne (UTC), avec série qui grossit le montant. |
+| `/parier <choix> <montant>`       | Pile ou face. Gain ×2, 48 % de victoire, mise et pertes/jour plafonnées. |
+| `/duel <adversaire> <montant>`    | Duel consenti par boutons (60 s) : mise contre mise, le gagnant rafle tout. |
+| `/historique`                     | Tes 10 dernières transactions (éphémère).                |
+| `/stats`                          | Macro-économie du serveur (masse, plus riche, taxe…).    |
+| `/horoscope`                      | Prédiction du jour, déterministe par membre et par jour. |
+| `/humeur`                         | Humeur du jour du Caillou et multiplicateur de gains.    |
+| `/classement semaine:true`        | Top des gains des 7 derniers jours.                      |
+| `/pantheon`                       | Les couronnés hebdomadaires.                             |
 | `/caillou-admin ajuster`          | (ManageGuild) Corrige un solde, audité.                  |
 | `/caillou-admin revoquer <id>`    | (ManageGuild) Révoque un perk actif et annule son effet. |
 | `/caillou-admin solde <membre>`   | (ManageGuild) Consulte un solde.                         |
 
 ## Modèle de données
 
-- **`users`** — `discord_id`, `balance` (BIGINT ≥ 0), `last_earn_at`.
+- **`users`** — `discord_id`, `balance` (BIGINT ≥ 0), `last_earn_at`,
+  `last_claim_at`, `claim_streak`.
 - **`transactions`** — journal d'audit : `delta`, `reason`, `created_at`.
 - **`shop_items`** — `cost`, `type`, `config` (jsonb : durée, clé d'env du rôle…).
 - **`active_perks`** — `expires_at`, `revert` (jsonb : données d'annulation).
+- **`app_state`** — clé/valeur jsonb (météorites en cours, dernière saison…).
+- **`hall_of_fame`** — vainqueur hebdomadaire : `season`, `user_id`, `earned`.
 
 Migrations SQL réelles dans `db/migrations/`. Le balayage d'expiration tourne
-toutes les 60 s (`src/composables/useSweep.ts`).
+toutes les 60 s (`src/composables/useSweep.ts`) et cadence aussi les événements
+cosmiques (`useEvents`) et les saisons (`useSeasons`).
 
 ## Déploiement (Dokploy / VPS)
 
@@ -152,12 +185,14 @@ docker compose up --build
 
 ```
 src/
-  commands/   wallet, give, classement, roast, boutique, acheter, admin
-  events/     ready (statut + sweep), messageCreate (gain)
-  composables/ useConfig, useDb, useEconomy, useShop, usePerks, useSweep, useClient, useRoast
+  commands/   wallet, give, classement, roast, boutique, acheter, admin,
+              offrande, parier, duel, historique, stats, horoscope, humeur, pantheon
+  events/     ready (statut + sweep), messageCreate (gain + interjections)
+  composables/ useConfig, useDb, useEconomy, useShop, usePerks, useSweep, useClient,
+               useRoast, useMood, useEvents, useSeasons, useAppState
   utils/      personality, format, respond, errors
-  data/       phrases
+  data/       phrases, roasts, moods, horoscopes
   db/         migrator, migrate-cli
   index.ts
-db/migrations/  0001_init.sql, 0002_seed_shop.sql
+db/migrations/  0001_init.sql, 0002_seed_shop.sql, 0003_features.sql
 ```

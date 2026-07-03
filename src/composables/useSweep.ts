@@ -23,6 +23,13 @@ async function sweepOnce(): Promise<void> {
   } finally {
     running = false;
   }
+
+  // Le tick fait aussi vivre les événements cosmiques et les saisons ; chacun
+  // gère ses propres erreurs pour ne jamais bloquer l'expiration des perks.
+  await useEvents().tick();
+  await useSeasons()
+    .tick()
+    .catch((err: Error) => logger.error("Seasons", `Tick saison échoué : ${err.message}`));
 }
 
 export interface Sweep {

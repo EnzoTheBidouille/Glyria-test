@@ -71,6 +71,8 @@ export interface Shop {
   revokePerk(id: number): Promise<boolean>;
   /** Supprime la ligne perk (après annulation par le sweep). */
   deletePerk(id: number): Promise<void>;
+  /** Le membre détient-il un perk actif de ce type ? (ex. bouclier anti-roast) */
+  hasActivePerk(userId: string, type: PerkType): Promise<boolean>;
 }
 
 const PERK_SELECT = `
@@ -101,10 +103,24 @@ export const useShop = (): Shop => {
     await db.query("DELETE FROM active_perks WHERE id = $1", [id]);
   };
 
+  const hasActivePerk: Shop["hasActivePerk"] = async (userId, type) => {
+    const { rows } = await db.query(
+      `SELECT 1
+         FROM active_perks ap
+         JOIN shop_items si ON si.id = ap.item_id
+        WHERE ap.user_id = $1 AND si.type = $2
+          AND (ap.expires_at IS NULL OR ap.expires_at > now())
+        LIMIT 1`,
+      [userId, type],
+    );
+    return rows.length > 0;
+  };
+
   return {
     get,
     getActivePerk,
     deletePerk,
+    hasActivePerk,
 
     async list() {
       const { rows } = await db.query<ShopItemRow>(
@@ -128,7 +144,7 @@ export const useShop = (): Shop => {
       return true;
     },
 
-    async purchase({ userId, itemId, value, channelId }) {
+    async purchase({ userId, itemId, value, channelId, targetId }) {
       const item = await get(itemId);
       if (!item || !item.active) {
         throw new CaillouError(pickPhrase("buy_unavailable"));
@@ -141,9 +157,11 @@ export const useShop = (): Shop => {
         throw new CaillouError(pickPhrase("buy_needs_value", { name: "toi" }));
       }
       if (cleanValue) {
-        // Limites Discord : nom de salon 100, statut custom 128. Vérifié avant
-        // le débit pour éviter un aller-retour débit → échec API → remboursement.
-        const maxLen = item.type === "channel_rename" ? 100 : 128;
+        // Limites Discord : nom de salon 100, pseudo 32, statut custom 128.
+        // Vérifié avant le débit pour éviter un aller-retour débit → échec API
+        // → remboursement.
+        const maxLen =
+          item.type === "channel_rename" ? 100 : item.type === "nickname_curse" ? 32 : 128;
         if (cleanValue.length > maxLen) {
           throw new CaillouError(pickPhrase("buy_too_long", { max: maxLen }));
         }
@@ -154,6 +172,17 @@ export const useShop = (): Shop => {
         }
         if (!useConfig().renameWhitelist.includes(channelId)) {
           throw new CaillouError(pickPhrase("buy_bad_channel"));
+        }
+      }
+      if (cfg.needsTarget) {
+        if (!targetId) {
+          throw new CaillouError(pickPhrase("buy_needs_target"));
+        }
+        // Le Bouclier de basalte protège des malédictions — vérifié avant débit.
+        if (await hasActivePerk(targetId, "roast_immunity")) {
+          throw new CaillouError(
+            pickPhrase("curse_shielded", { target: `<@${targetId}>` }),
+          );
         }
       }
 
@@ -214,6 +243,31 @@ export const useShop = (): Shop => {
       }
       if (item.type === "bot_status") {
         revert.appliedValue = cleanValue;
+      }
+      if (item.type === "nickname_curse" && targetId) {
+        revert.targetId = targetId;
+        revert.appliedValue = cleanValue;
+        // Même principe que le renommage de salon : si la victime est déjà
+        // maudite, le pseudo courant est un pseudo de perk — on hérite du VRAI
+        // pseudo d'origine pour que la dernière expiration le restaure.
+        const { rows } = await db.query<{ revert: PerkRevert }>(
+          `SELECT ap.revert
+             FROM active_perks ap
+             JOIN shop_items si ON si.id = ap.item_id
+            WHERE si.type = 'nickname_curse'
+              AND ap.revert->>'targetId' = $1
+              AND (ap.expires_at IS NULL OR ap.expires_at > now())
+            ORDER BY ap.granted_at DESC
+            LIMIT 1`,
+          [targetId],
+        );
+        if (rows[0]) {
+          revert.originalNick = rows[0].revert.originalNick ?? null;
+        } else {
+          const guild = await useClient().guilds.fetch(useConfig().guildId);
+          const member = await guild.members.fetch(targetId);
+          revert.originalNick = member.nickname;
+        }
       }
 
       const expiresAt = cfg.durationMs ? new Date(Date.now() + cfg.durationMs) : null;

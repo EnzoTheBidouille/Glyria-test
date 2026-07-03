@@ -25,6 +25,22 @@ export default new GlyriaCommand()
         return;
       }
 
+      // Bouclier de basalte : la victime a payé pour la paix. Se roast soi-même
+      // reste permis — renoncer à son bouclier est un droit fondamental.
+      if (
+        target.id !== ctx.user.id &&
+        (await useShop().hasActivePerk(target.id, "roast_immunity"))
+      ) {
+        await ctx.reply({
+          content: pickPhrase("roast_shielded", {
+            target: `<@${target.id}>`,
+            name: ctx.user.username,
+          }),
+          allowedMentions: { parse: [] },
+        });
+        return;
+      }
+
       const balance = await useEconomy().balanceOf(target.id);
       const context = Math.random() < 1 / 3 ? walletTier(balance) : "generic";
       const text =

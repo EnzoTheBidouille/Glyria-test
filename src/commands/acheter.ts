@@ -43,6 +43,7 @@ async function buy(
   itemId: string,
   value: string | undefined,
   channelInput: string | undefined,
+  targetId?: string,
 ): Promise<void> {
   await ctx.deferReply({ flags: djs.MessageFlags.Ephemeral });
   try {
@@ -53,6 +54,7 @@ async function buy(
       itemId,
       value,
       channelId,
+      targetId,
     });
     const line = pickPhrase("buy_ok", { item: result.item.name, cost: result.cost });
     const expiry = result.expiresAt ? ` — expire ${discordRelative(result.expiresAt)}` : "";
@@ -112,4 +114,36 @@ export default new GlyriaCommand()
         const texte = ctx.options.getString("texte", true);
         return buy(ctx, "bot_status", texte, undefined);
       }),
+  )
+  .addSubCommand((c) =>
+    c
+      .setName("maudire")
+      .setDescription("Rebaptiser un autre membre pendant 1 heure. Cruel et tarifé.")
+      .addUserOption((o) =>
+        o.setName("cible").setDescription("La victime de la malédiction.").setRequired(true),
+      )
+      .addStringOption((o) =>
+        o
+          .setName("pseudo")
+          .setDescription("Le pseudo infligé (32 caractères max).")
+          .setRequired(true),
+      )
+      .execute(async (ctx) => {
+        const cible = ctx.options.getUser("cible", true);
+        const pseudo = ctx.options.getString("pseudo", true);
+        if (cible.bot) {
+          await ctx.reply({
+            content: "❌ On ne maudit pas un bot. Entre machines, on se respecte.",
+            flags: djs.MessageFlags.Ephemeral,
+          });
+          return;
+        }
+        return buy(ctx, "nickname_curse", pseudo, undefined, cible.id);
+      }),
+  )
+  .addSubCommand((c) =>
+    c
+      .setName("bouclier")
+      .setDescription("24 h d'immunité contre /roast et les malédictions.")
+      .execute((ctx) => buy(ctx, "roast_immunity", undefined, undefined)),
   );
